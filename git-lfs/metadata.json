@@ -1,0 +1,9 @@
+{
+  "type": "bundle",
+  "version": 1,
+  "binaries": ["git-lfs", "install.sh"],
+  "env": [
+    { "key": "PATH", "type": "path", "required": true, "value": "${installPath}", "visibility": "public" },
+    { "key": "MANPATH", "type": "path", "value": "${installPath}/man", "visibility": "public" }
+  ]
+}

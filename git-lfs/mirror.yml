@@ -1,0 +1,107 @@
+extends: ../mirror-base.yml
+
+name: git-lfs
+
+# Logical `git-lfs/git-lfs` at ghcr.io/ocx-contrib/git-lfs/git-lfs. The org is
+# the project's own brand, so it names the namespace.
+target:
+  registry: ghcr.io
+  repository: ocx-contrib/git-lfs/git-lfs
+
+source:
+  type: github_release
+  owner: git-lfs
+  repo: git-lfs
+  tag_pattern: "^v(?P<version>\\d+\\.\\d+\\.\\d+)$"
+
+# ─── libc gate — evidence ───────────────────────────────────────────────────
+# Go with cgo off. Measured on both Linux arches at both ends of the range:
+#   $ file git-lfs-3.8.1/git-lfs   (linux amd64 / arm64)
+#   ELF 64-bit LSB executable, x86-64 | ARM aarch64, statically linked
+#   $ readelf -l … | grep -c INTERP  → 0      (3.6.1 amd64/arm64: same)
+# No PT_INTERP → requires nothing of the host → BARE Linux keys, proven by the
+# ubuntu + alpine + fedora legs below.
+#
+# ─── Resolution — verified both ways on every in-range release ──────────────
+# 3.6.0, 3.6.1, 3.7.0, 3.7.1, 3.8.0, 3.8.1: each pattern matches EXACTLY ONE
+# asset, all six platforms, every release. Not carried: linux 386/arm/
+# loong64/ppc64le/riscv64/s390x, freebsd, windows-386, the windows installer
+# `.exe`, source + vendor tarballs, `*.asc` sidecars.
+assets:
+  linux/amd64:
+    - "^git-lfs-linux-amd64-v\\d+\\.\\d+\\.\\d+\\.tar\\.gz$"
+  linux/arm64:
+    - "^git-lfs-linux-arm64-v\\d+\\.\\d+\\.\\d+\\.tar\\.gz$"
+  darwin/amd64:
+    - "^git-lfs-darwin-amd64-v\\d+\\.\\d+\\.\\d+\\.zip$"
+  darwin/arm64:
+    - "^git-lfs-darwin-arm64-v\\d+\\.\\d+\\.\\d+\\.zip$"
+  windows/amd64:
+    - "^git-lfs-windows-amd64-v\\d+\\.\\d+\\.\\d+\\.zip$"
+  windows/arm64:
+    - "^git-lfs-windows-arm64-v\\d+\\.\\d+\\.\\d+\\.zip$"
+
+# Every archive wraps one versioned dir `git-lfs-<V>/` holding the binary at
+# its root (no bin/) beside man/, README.md, CHANGELOG.md (+ install.sh off
+# Windows). The dir name embeds the version, so it cannot be a PATH entry —
+# strip it, and PATH is a bare ${installPath}.
+asset_type:
+  type: archive
+  strip_components: 1
+
+# Forced by the bare ${installPath} PATH (auto/verify exit 65 with no
+# `${installPath}/<dir>` target). `binaries` is hand-listed per platform.
+bin_scan: "off"
+
+metadata:
+  default: metadata.json
+  platforms:
+    windows/amd64: metadata-windows.json
+    windows/arm64: metadata-windows.json
+
+catalog:
+  logo: logo.svg
+
+versions:
+  min: "3.6.0"
+  new_per_run: 6
+  poll_interval: "30 5-23/6 * * *"   # poll_stagger.py git-lfs/git-lfs
+
+tests:
+  - name: smoke
+    script: git-lfs/tests/smoke.star
+
+platforms:
+  linux/amd64:
+    runner: ubuntu-latest
+    containers:
+      - { image: "ubuntu:24.04", shell: bash }
+      - { image: "alpine:3.20",  shell: sh }
+      - { image: "fedora:40",    shell: bash }
+  linux/arm64:
+    runner: ubuntu-24.04-arm
+    containers:
+      - { image: "ubuntu:24.04", shell: bash }
+      - { image: "alpine:3.20",  shell: sh }
+      - { image: "fedora:40",    shell: bash }
+  darwin/amd64:
+    runner: macos-15            # Rosetta 2; native Intel pool deadlocks push
+    prefix: ["arch", "-x86_64"]
+  darwin/arm64:
+    runner: macos-15
+    shell: bash
+  windows/amd64:
+    runner: windows-latest
+    shell: pwsh
+  windows/arm64:
+    runner: windows-11-arm
+    shell: pwsh
+
+annotations:
+  # LICENSE.md: MIT, with BSD-3-Clause for Go-derived portions
+  # (GitHub's detector reports NOASSERTION because of the second block).
+  org.opencontainers.image.licenses: "MIT AND BSD-3-Clause"
+
+announce:
+  package: git-lfs/git-lfs
+  fork: ocx-contrib/index
